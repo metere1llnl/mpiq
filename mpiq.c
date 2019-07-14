@@ -103,7 +103,11 @@ int main(int argc, char **argv)
 	
 	int cs = MPIX_Query_cuda_support();
 	int N = 8;
-    int verifyArrays = 0;
+	int verifyArrays = 0;
+
+	cudaEvent_t start, stop;
+	cuChk(cudaEventCreate(&start));
+	cuChk(cudaEventCreate(&stop));
 
 	if (argc > 1)
 	{
@@ -152,6 +156,7 @@ int main(int argc, char **argv)
 			h_a[i] = 666;
 		}
 
+		cudaEventRecord(start, 0);
 		cuChk(cudaMalloc(&d_a, N*sizeof(int)));
  		cuChk(cudaMemcpy(d_a, h_a, N*sizeof(int), cudaMemcpyHostToDevice)); 
 	
@@ -191,9 +196,14 @@ int main(int argc, char **argv)
 		        MPI_Wait(&mpiReq, &mpiStatus);
 			}
 		}
+		cudaEventRecord(stop, 0);
+		cudaEventSynchronize(stop);
+		float gpu_time = 0.0f;
 
+		cuChk(cudaEventElapsedTime(&gpu_time, start, stop));
+		printf ("Rank %d, CUDA Time: %.5f ms\n", rank, gpu_time);
 		MPI_Status mpiStatus;
-        MPI_Wait(&mpiReq, &mpiStatus);
+	        MPI_Wait(&mpiReq, &mpiStatus);
 		successFlag = 1;
 	}
 	else
@@ -201,7 +211,9 @@ int main(int argc, char **argv)
 		MPI_Request mpiReq;
 		cuChk(cudaMalloc(&d_a, N*sizeof(int)));
 		lh_a = (int*) calloc(N, sizeof(int));
-		
+
+		cuChk( cudaEventRecord(start, 0) );		
+
 		if (cs)
 		{
 			MPI_Irecv(d_a, N, MPI_INT, 0, 0, MPI_COMM_WORLD, &mpiReq);
@@ -214,22 +226,22 @@ int main(int argc, char **argv)
 	                MPI_Status mpiStatus;
 	                MPI_Wait(&mpiReq, &mpiStatus);
 
-            if (verifyArrays)
-            {
-    			for (int i = 0; i < N; i++)
-	    		{
-		    		if (lh_a[i] != 666)
-			    	{
-				        if (i < 10)
-                        {
-                        	printf("Rank %d, Error: lh_a[%d] = %d\n", rank, i, lh_a[i]);
-                        }
-                        else
-                        {
-                            MPI_Finalize();
-                            exit(-1);
-                        }
-                    }
+        	    	if (verifyArrays)
+		        {
+    				for (int i = 0; i < N; i++)
+		    		{
+		    			if (lh_a[i] != 666)
+				    	{
+					        if (i < 10)
+	                		        {
+                        				printf("Rank %d, Error: lh_a[%d] = %d\n", rank, i, lh_a[i]);
+		        	                }
+                			        else
+			                        {
+	                			        MPI_Finalize();
+			                        	exit(-1);
+                        			}
+					}
 				}
 			}
 			cuChk(cudaMemcpy(d_a, lh_a, N*sizeof(int), cudaMemcpyHostToDevice));
@@ -237,8 +249,14 @@ int main(int argc, char **argv)
 
 		h_a = (int *) calloc(N, sizeof(int));
 		cuChk(cudaMemcpy(h_a, d_a, N*sizeof(int), cudaMemcpyDeviceToHost));	
+		
+		cuChk(cudaEventRecord(stop, 0));
+		cuChk(cudaEventSynchronize(stop));
 
-        		
+		float gpu_time = 0.0f;
+		cuChk(cudaEventElapsedTime(&gpu_time, start, stop));
+		
+        	printf ("Rank %d, CUDA Time: %.5f ms\n",rank, gpu_time);
 
 		for (int i = 0; i < N; i++)
 		{
@@ -258,12 +276,15 @@ int main(int argc, char **argv)
 		successFlag = 1;
 	}
 
-//	MPI_Barrier(MPI_COMM_WORLD);
+	MPI_Barrier(MPI_COMM_WORLD);
 
 	if (successFlag)
 	{
 		printf("Rank %d, SUCCESS!\n", rank);
 	}
+
+	cudaEventDestroy(start);
+	cudaEventDestroy(stop);
 
 	cuChk(cudaFree(d_a));
 	free(h_a);
