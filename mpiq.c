@@ -103,6 +103,7 @@ int main(int argc, char **argv)
 	
 	int cs = MPIX_Query_cuda_support();
 	int N = 8;
+    int verifyArrays = 0;
 
 	if (argc > 1)
 	{
@@ -118,6 +119,10 @@ int main(int argc, char **argv)
 			{
 				N = atoi(argv[i+1]);
 			}
+            if (!strcmp(argv[i],"-v"))
+            {
+                verifyArrays = 1;
+            }
 		}
 	}
 	
@@ -167,30 +172,32 @@ int main(int argc, char **argv)
 				int *lh_a = (int *) calloc(N, sizeof(int));
 				cudaMemcpy(lh_a, d_a, N*sizeof(int), cudaMemcpyDeviceToHost);
 
-				for (int j = 0; j < N; j++)
-				{
-					if (lh_a[j] != 666)
-					{
-						if (j < 10)
-						{
-							printf("Rank %d, Error: lh_a[%d] = %d\n", rank, j, lh_a[j]);
-						}
-						else
-						{
-							MPI_Finalize();	
-							exit(-1);
-						}
-					}
-				}
-			
+                if (verifyArrays)
+                {
+    				for (int j = 0; j < N; j++)
+	    			{
+		    			if (lh_a[j] != 666)
+			    		{
+				    		if (j < 10)
+					    	{
+						    	printf("Rank %d, Error: lh_a[%d] = %d\n", rank, j, lh_a[j]);
+    						}
+	    					else
+		    				{
+			    				MPI_Finalize();	
+				    			exit(-1);
+					    	}
+    					}
+	    			}
+			    }
 				MPI_Isend(lh_a, N, MPI_INT, i, 0, MPI_COMM_WORLD, &mpiReq);
-//				MPI_Status mpiStatus;
-//		                MPI_Wait(&mpiReq, &mpiStatus);
+				MPI_Status mpiStatus;
+		        MPI_Wait(&mpiReq, &mpiStatus);
 			}
 		}
 
 		MPI_Status mpiStatus;
-                MPI_Wait(&mpiReq, &mpiStatus);
+        MPI_Wait(&mpiReq, &mpiStatus);
 		successFlag = 1;
 	}
 	else
@@ -211,13 +218,22 @@ int main(int argc, char **argv)
 	                MPI_Status mpiStatus;
 	                MPI_Wait(&mpiReq, &mpiStatus);
 
-			for (int i = 0; i < N; i++)
-			{
-				if (lh_a[i] != 666)
-				{
-					printf("Rank %d, Error: lh_a[%d] = %d\n", rank, i, lh_a[i]);
-                                        MPI_Finalize();
-                                        exit(-1);
+            if (verifyArrays)
+            {
+    			for (int i = 0; i < N; i++)
+	    		{
+		    		if (lh_a[i] != 666)
+			    	{
+				        if (i < 10)
+                        {
+                        	printf("Rank %d, Error: lh_a[%d] = %d\n", rank, i, lh_a[i]);
+                        }
+                        else
+                        {
+                            MPI_Finalize();
+                            exit(-1);
+                        }
+                    }
 				}
 			}
 			cudaMemcpy(d_a, lh_a, N*sizeof(int), cudaMemcpyHostToDevice);
@@ -225,7 +241,9 @@ int main(int argc, char **argv)
 
 		h_a = (int *) calloc(N, sizeof(int));
 		cudaMemcpy(h_a, d_a, N*sizeof(int), cudaMemcpyDeviceToHost);	
-		
+
+        		
+
 		for (int i = 0; i < N; i++)
 		{
 			if (h_a[i] != 666)
