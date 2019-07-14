@@ -137,11 +137,9 @@ int main(int argc, char **argv)
 
 	MPI_Get_processor_name(hname, &hlen);
 
-//	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 	MPI_Comm_size(MPI_COMM_WORLD, &totalRanks);
 
 	if (rank == 0) printf("CUDA-awareness: %d\n", cs);
-//	MPI_Barrier(MPI_COMM_WORLD);
 
 	printf("Rank %d selected GPU %d on hostname %s\n",rank, rank%4, hname);
 
@@ -154,8 +152,8 @@ int main(int argc, char **argv)
 			h_a[i] = 666;
 		}
 
-		cudaMalloc(&d_a, N*sizeof(int));
-		cudaMemcpy(d_a, h_a, N*sizeof(int), cudaMemcpyHostToDevice); 
+		cuChk(cudaMalloc(&d_a, N*sizeof(int)));
+ 		cuChk(cudaMemcpy(d_a, h_a, N*sizeof(int), cudaMemcpyHostToDevice)); 
 	
 		MPI_Request mpiReq;
 
@@ -164,13 +162,11 @@ int main(int argc, char **argv)
 			if (cs) // This will only work with CUDA-Aware MPI
 			{
 				MPI_Isend(d_a, N, MPI_INT, i, 0, MPI_COMM_WORLD, &mpiReq);
-//		                MPI_Status mpiStatus;
-//        		        MPI_Wait(&mpiReq, &mpiStatus);
 			}
 			else
 			{
 				int *lh_a = (int *) calloc(N, sizeof(int));
-				cudaMemcpy(lh_a, d_a, N*sizeof(int), cudaMemcpyDeviceToHost);
+				cuChk(cudaMemcpy(lh_a, d_a, N*sizeof(int), cudaMemcpyDeviceToHost));
 
                 if (verifyArrays)
                 {
@@ -203,7 +199,7 @@ int main(int argc, char **argv)
 	else
 	{
 		MPI_Request mpiReq;
-		cudaMalloc(&d_a, N*sizeof(int));
+		cuChk(cudaMalloc(&d_a, N*sizeof(int)));
 		lh_a = (int*) calloc(N, sizeof(int));
 		
 		if (cs)
@@ -236,11 +232,11 @@ int main(int argc, char **argv)
                     }
 				}
 			}
-			cudaMemcpy(d_a, lh_a, N*sizeof(int), cudaMemcpyHostToDevice);
+			cuChk(cudaMemcpy(d_a, lh_a, N*sizeof(int), cudaMemcpyHostToDevice));
 		}
 
 		h_a = (int *) calloc(N, sizeof(int));
-		cudaMemcpy(h_a, d_a, N*sizeof(int), cudaMemcpyDeviceToHost);	
+		cuChk(cudaMemcpy(h_a, d_a, N*sizeof(int), cudaMemcpyDeviceToHost));	
 
         		
 
@@ -269,7 +265,7 @@ int main(int argc, char **argv)
 		printf("Rank %d, SUCCESS!\n", rank);
 	}
 
-	cudaFree(d_a);
+	cuChk(cudaFree(d_a));
 	free(h_a);
 	free(lh_a);		
 
